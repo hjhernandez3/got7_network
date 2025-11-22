@@ -88,6 +88,36 @@ count_totals_feat <- unique_songs_per_artist_feat %>%
   group_by(Group, Feat_Group, Artist, role) %>%
   summarise(total_songs = n_distinct(SONGS))
 
+# featured artists 
+unique_featured_others <- disco_pre1 %>%
+  select(SONGS, Artist, Feat, Group) %>%
+  filter(Group == "Solo" | Group == "Solo (Jay B)") %>%
+  separate_rows(Feat, sep = ",\\s*") %>%
+  filter(Artist %in% got7) %>%
+  filter(!is.na(Feat), Feat != "", Feat != Artist) %>%
+  distinct(Artist, Feat) %>%
+  group_by(Artist) %>%
+  summarise(
+    unique_featured_others = n_distinct(Feat),
+    featured_others_list = list(sort(unique(Feat))),
+    .groups = "drop"
+  )
+
+# featured on 
+unique_featured_on <- disco_pre1 %>%
+  select(SONGS, Artist, Feat, Group) %>%
+  filter(Group == "Solo" | Group == "Solo (Jay B)") %>%
+  separate_rows(Feat, sep = ",\\s*") %>%
+  filter(Feat %in% got7) %>%
+  filter(!is.na(Artist), Artist != "", Artist != Feat) %>%
+  distinct(Feat, Artist) %>%
+  group_by(Feat) %>%
+  summarise(
+    unique_featured_on = n_distinct(Artist),
+    featured_others_list = list(sort(unique(Artist))),
+    .groups = "drop"
+  )  %>%
+  rename(Artist = Feat)
 
 ###---BAR GRAPH---####
 
@@ -102,7 +132,28 @@ plot_data <- count_totals_feat %>%
     )
   ) %>%
   group_by(Artist, song_type) %>%
-  summarise(total_songs = sum(total_songs), .groups = "drop")%>%
+  summarise(total_songs = sum(total_songs), .groups = "drop") 
+
+# Adjust to ensure featured does not include being in JJ Project, Jus2 or GOT7
+adjustments <- plot_data %>%
+  group_by(Artist) %>%
+  summarise(
+    subtract_featured =
+      176 +
+      ifelse(any(song_type == "JJ Project"), 8, 0) +
+      ifelse(any(song_type == "Jus2"), 14, 0)
+  )
+
+
+plot_data <- plot_data %>%
+  left_join(adjustments, by = "Artist") %>%
+  mutate(
+    total_songs = ifelse(
+      song_type == "Featured",
+      total_songs - subtract_featured,
+      total_songs
+    )
+  )%>%
   group_by(Artist) %>%
   mutate(
     percent = 100 * total_songs / sum(total_songs)
@@ -142,6 +193,9 @@ prop_song <- ggplot(plot_data, aes(
   ))
 
 ggsave("images/got7_disco.png", plot = prop_song, width = 10, height = 8, dpi = 300)
+
+
+
 
 ###---NETWORK---###
 total <- unique_songs_per_artist_feat %>%
@@ -183,7 +237,7 @@ p1 <- ggraph(disco_graph, layout = "kk") +
   guides(size = "none", edge_alpha = "none")
   
 p1
-ggsave("images/got7_sna.png", plot = p1, width = 10, height = 8, dpi = 300)
+#ggsave("images/got7_sna.png", plot = p1, width = 10, height = 8, dpi = 300)
 
 
 #--- INTERACTIVE----
@@ -191,28 +245,35 @@ all_artists <- unique(c(edges$from, edges$to))
 
 nodes <- data.frame(
   id = all_artists,
-  label = all_artists,
+  labels = all_artists,
   stringsAsFactors = FALSE
 ) %>%
+  rowwise() %>%
   mutate(
     size = total$total_songs[match(id, total$Artist)],
     color = ifelse(id %in% got7, "#3c8350", "gray70"),
     group = ifelse(id %in% got7, id, NA) 
   )
 
-
-edges_vis <- edges %>%
-  filter(from %in% got7 | to %in% got7) %>%  # keep only edges involving GOT7
-  rename(value = weight) %>%
+edges <- disco_pre1 %>%
+  filter(!is.na(Artist) & !is.na(Feat)) %>%
+  separate_rows(Artist, Feat, sep = ",\\s*") %>%
+  select(from = Artist, to = Feat) %>%
+  count(from, to, name = "weight") %>%
   mutate(
-    color = ifelse(from %in% got7 & to %in% got7, "green", "gray70")  # both GOT7 = green
+    color = ifelse(from %in% got7 & to %in% got7, "green", "gray70")
+  )%>%
+  mutate(
+    color = lapply(color, function(col) list(color = col))
   )
+
+
 
 nodes <- nodes %>%
   mutate(
-    group = ifelse(id %in% got7, "GOT7", "Other"),
-    color = ifelse(group == "GOT7", "#3c8350", "gray70")
+    size = scales::rescale(size, to = c(3, 8))
   )
+
 
 graph <- visNetwork(nodes, edges) %>%
   visGroups(groupname = "GOT7", color = "#3c8350") %>%
@@ -220,20 +281,26 @@ graph <- visNetwork(nodes, edges) %>%
   visNodes(
     font = list(size = 50, valign = "top"),
     color = list(
-      highlight = list(background = "inherit", border = "inherit"),
-      hover = list(background = "inherit", border = "inherit")
+      highlight = list(background = "inherit", 
+                       border = "black"),
+      hover = list(background = "inherit", 
+                   border = "black")
     )
   ) %>%
   visEdges(
     smooth = TRUE,
     scaling = list(min = 1, max = 5),
-    width = "weight"
+    width = "weight",
   ) %>%
   visOptions(
-    highlightNearest = list(enabled = TRUE, degree = 1, hover = FALSE),
+    highlightNearest = list(
+      enabled = TRUE,
+      degree = 1,
+      hover = FALSE
+    ),
     nodesIdSelection = list(
       enabled = TRUE,
-      values = nodes$id[nodes$group == "GOT7"]  # dropdown only for GOT7 members
+      values = nodes$id[nodes$group == "GOT7"] 
     )
   ) %>%
   visPhysics(
@@ -252,4 +319,8 @@ graph
 
 
 saveWidget(graph, file = "docs/index.html", selfcontained = TRUE)
+
+
+
+# Network Analysis
 
