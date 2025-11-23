@@ -464,7 +464,8 @@ net <- visNetwork(vis_nodes, vis_edges, height = "900px", width = "100%") %>%
     tags$div(
       style = "text-align:center; margin-bottom:10px;",
       tags$h3("GOT7 Collaboration Network"),
-      tags$p("By Hortencia Josefina Hernandez")
+      tags$p("By Hortencia Josefina Hernandez"),
+      tags$p("(As of November 2025)")
     )
     ) %>%
   visLayout(
@@ -472,7 +473,7 @@ net <- visNetwork(vis_nodes, vis_edges, height = "900px", width = "100%") %>%
   ) 
 
 
-saveWidget(net, file = "docs/got7_communities.html", selfcontained = TRUE)
+saveWidget(net, file = "docs/index.html", selfcontained = TRUE)
 
 
 # For directionality
