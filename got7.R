@@ -136,9 +136,12 @@ unique_featured_on <- disco_pre1 %>%
 
 
 got7_feature_tbl <- unique_featured_others %>%
-  left_join(unique_featured_on, by = "Artist") %>%
+  full_join(unique_featured_on, by = "Artist") %>%  
+  mutate(
+    unique_featured_others = coalesce(unique_featured_others, 0),
+    unique_featured_on     = coalesce(unique_featured_on, 0)
+  ) %>%
   arrange(desc(unique_featured_on), desc(unique_featured_others))
-
 got7_feature_tbl
 
 tags$table(
